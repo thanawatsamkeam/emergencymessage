@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8" />
+    <title class="fill">การแจ้งเตือนฉุกเฉิน</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap"
+          rel="stylesheet" />
+
+    <style>
+        :root {
+            --header-font: "Noto Serif Thai", serif;
+            --subheader-font: "Sarabun", sans-serif;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000000;
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: -webkit-fill-available;
+            position: fixed;
+        }
+
+        .header {
+            font-family: var(--header-font);
+            font-size: 4vh;
+            font-weight: 700;
+            line-height: 150%;
+            background-color: #000000;
+            width: -webkit-fill-available;
+            padding: 2vh 0;
+            text-align: center;
+        }
+
+        .sender {
+            font-family: var(--subheader-font);
+            font-size: 4vh;
+            font-weight: 400;
+            line-height: 150%;
+            margin-top: 2vh;
+            text-align: center;
+        }
+
+        .alert-box {
+            font-family: var(--subheader-font);
+            font-size: 4vh;
+            font-weight: 400;
+            line-height: 150%;
+            border: 2px solid white;
+            padding: 4vh;
+            text-align: left;
+            margin-top: 2vh;
+            width: 88vw;
+            max-height: 68vh;
+            overflow: hidden;
+        }
+
+        .loading {
+            text-align: center;
+        }
+
+        .alert-box.scrollable {
+            overflow: hidden;
+            position: relative;
+        }
+
+        .alert-box.scrollable .scroll-marquee {
+            will-change: transform;
+        }
+
+        .alert-box.scrollable .scroll-content {
+            display: block;
+            margin-bottom: 8vh;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header" id="header">การแจ้งเตือนฉุกเฉิน</div>
+    <div class="sender" id="sender">กรมป้องกันและบรรเทาสาธารณภัย</div>
+    <div class="alert-box" id="alertText"><div class="loading">กำลังโหลดข้อมูลการแจ้งเตือน...</div></div>
+
+    <script>
+        // Todo: Remove this after Alpha team function is ready
+        const PROXY_SERVER_URL = "https://katalina-unvaporous-blossom.ngrok-free.dev";
+        // End Todo
+        //const SITE_URL = "https://ndwc-cap-dev.azurewebsites.net";
+        const SITE_URL = "https://localhost:44340";
+        const CAP_URL = `${SITE_URL}/cap/cap-alerts/latest`;
+        const BASE_FILE_PATH = "/Kiosk/PreRecordded";
+        const BEEF_FILE_NAME = "emergency_beep";
+        const FILE_TYPE = ".wav";
+        const BEEP_FILE = `${SITE_URL}${BASE_FILE_PATH}/${BEEF_FILE_NAME}${FILE_TYPE}`;
+        const HEADER_COLORS = {
+            EXTREME: "#fc0d20",
+            SEVERE: "#FF4D0D"
+        };
+        const PROXY = (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+        const SENDERS = {
+            DPM: { text: "NDWC", path: "DPM" },
+            CBC: { text: "CBC", path: "CBC" },
+        };
+        const SEVERITIES = {
+            EXTREME: { text: "ร้ายแรงมาก", path: "Extreme" },
+            SEVERE: { text: "ร้ายแรง", path: "Severe" }
+        };
+        const CATEGORIES = {
+            GENERAL_SOP: { text: "มาตรฐานทั่วไป", path: "SOP" },
+            EARTHQUAKE: { text: "แผ่นดินไหว", path: "Earthquake" },
+            TSUNAMI: { text: "สึนามิ", path: "Tsunami" },
+            TROPICAL_CYCLONE: { text: "วาตภัย (พายุหมุนเขตร้อน)", path: "TropicalCyclone" },
+            FLOOD: { text: "อุทกภัย", path: "Flood" },
+            LANDSLIDE: { text: "ดินโคลนถล่ม", path: "Landslide" },
+            COLD_WEATHER: { text: "ภัยหนาว", path: "ColdWeather" },
+            FINE_PARTICULATE_MATTER: { text: "ภัยจากฝุ่นละอองขนาดเล็ก (PM2.5)", path: "FineParticularMatter" },
+            MASS_VIOLENCE_INCIDENT_IN_PUBLIC_AREAS: { text: "กรณีเหตุรุนแรงในพื้นที่สาธารณะ", path: "MassViolenceIncidentInPublicAreas" },
+            HUMAN_EPIDEMICS: { text: "ภัยจากโรคระบาดในมนุษย์", path: "HumanEpidemics" },
+            FIRE_CHEMICAL_AND_HAZARDOUS_MATERIAL: { text: "อัคคีภัยและภัยจากสารเคมีและวัตถุอันตราย", path: "FireChemicalAndHazardousMaterial" },
+            MILITARY_INVASION: { text: "ภัยจากการรุกรานจากภายนอกประเทศ", path: "MilitaryInvasion" },
+            TRAFFIC_AND_TRANSPORT_INCIDENTS: { text: "ภัยจากการจราจรและขนส่ง", path: "TrafficAndTransportIncidents" },
+            CYBER_THREATS: { text: "ภัยคุกคามทางไซเบอร์", path: "CyberThreats" },
+            OTHER_HAZARDS: { text: "ภัยอื่นๆ", path: "OtherHazards" },
+            GEOPHYSICAL: { text: "ธรณีฟิสิกส์", path: "Geophysical" },
+            METEOROLOGICAL: { text: "อุตุนิยมวิทยา", path: "Meteorological" },
+            GENERAL_EMERGENCY_AND_PUBLIC_SAFETY: { text: "ความปลอดภัย", path: "GeneralEmergencyAndPublicSafety" },
+            LAW_ENFORCEMENT_MILITARY_HOMELAND_AND_LOCAL_PRIVATE_SECURITY: { text: "ความมั่นคง", path: "LawEnforcementMilitaryHomelandAndLocalprivateSecurity" },
+            FIRE_SUPPRESSION_AND_RESCUE: { text: "ไฟ", path: "FireSuppressionAndRescue" },
+            MEDICAL_AND_PUBLIC_HEALTH: { text: "สุขภาพ", path: "MedicalAndPublicHealth" },
+            OTHER_EVENTS: { text: "อื่น ๆ", path: "OtherEvents" },
+        };
+        const EVENTS = {
+            GENERAL_SOP: { text: "มาตรฐานทั่วไป", path: "SOP" },
+            MINOR: { text: "1-2.9 เกิดการสั่นไหวเล็กน้อย", path: "Minor" },
+            LIGHT: { text: "3-3.9 เกิดการสั่นไหวเล็กน้อย", path: "Light" },
+            MODERATE: { text: "4-4.9 เกิดการสั่นไหวปานกลาง", path: "Moderate" },
+            STRONG: { text: "5-5.9 เกิดการสั่นไหวรุนแรงเป็นบริเวณกว้าง", path: "Strong" },
+            MAJOR: { text: "6-6.9 เกิดการสั่นไหวรุนแรงมาก", path: "Major" },
+            GREAT: { text: "7.0 ขึ้นไป เกิดการสั่นไหวร้ายแรง", path: "Great" },
+            TSUNAMI: { text: "สึนามิ", path: "Tsunami" },
+            TROPICAL_DEPRESSION: { text: "พายุดีเปรสชันเขตร้อน", path: "TropicalDepression" },
+            TROPICAL_STORM: { text: "พายุโซนร้อน", path: "TropicalStorm" },
+            TYPHOON: { text: "ไต้ฝุ่น", path: "Typhoon" },
+            FLOOD: { text: "อุทกภัย", path: "Flood" },
+            LANDSLIDE: { text: "ดินโคลนถล่ม", path: "Landslide" },
+            COLD_WEATHER: { text: "ภัยหนาว", path: "ColdWeather" },
+            FINE_PARTICULATE_MATTER: { text: "ภัยจากฝุ่นละอองขนาดเล็ก (PM2.5)", path: "PM25" },
+            MASS_VIOLENCE_INCIDENT_IN_PUBLIC_AREAS: { text: "กรณีเหตุรุนแรงในพื้นที่สาธารณะ", path: "MassViolenceIncidentInPublicAreas" },
+            HUMAN_EPIDEMICS: { text: "ภัยจากโรคระบาดในมนุษย์", path: "HumanEpidemics" },
+            FIRE_CHEMICAL_AND_HAZARDOUS_MATERIAL: { text: "อัคคีภัยและภัยจากสารเคมีและวัตถุอันตราย", path: "FireChemicalAndHazardousMaterial" },
+            MILITARY_INVASION: { text: "ภัยจากการรุกรานจากภายนอกประเทศ", path: "MilitaryInvasion" },
+            TRAFFIC_AND_TRANSPORT_INCIDENTS: { text: "ภัยจากการจราจรและขนส่ง", path: "TrafficAndTransportIncidents" },
+            CYBER_THREATS: { text: "ภัยคุกคามทางไซเบอร์", path: "CyberThreats" },
+            OTHER_HAZARDS: { text: "ภัยอื่นๆ", path: "OtherHazards" },
+            OET001: { text: "สถานการณ์คนร้ายใช้อาวุธปืน", path: "OET-001" },
+            OET046: { text: "โรคติดต่อ", path: "OET-046" },
+            OET063: { text: "ภัยแล้ง", path: "OET-063" },
+            OET068: { text: "แผ่นดินไหว", path: "OET-068" },
+            OET081: { text: "น้ำท่วม", path: "OET-081" },
+            OET101: { text: "คลื่นแรง", path: "OET-101" },
+            OET112: { text: "เหตุในโรงงาน", path: "OET-112" },
+            OET119: { text: "ดินถล่ม", path: "OET-119" },
+            OET132: { text: "มรสุม", path: "OET-132" },
+            OET217: { text: "ไฟป่า", path: "OET-217" },
+            PRA: { text: "PRA", path: "PRA" },
+            EXA: { text: "EXA", path: "EXA" },
+            ASA: { text: "ASA", path: "ASA" },
+            ACI: { text: "ACI", path: "ACI" },
+            CAM: { text: "CAM", path: "CAM" },
+            RMT: { text: "RMT", path: "RMT" },
+        };
+        const SCROLL_THRESHOLD = 600;
+        const SCROLL_STEP = 1;
+        const SCROLL_INTERVAL = 50;
+
+        let autoScrollIntervalId = null;
+        let currentScrollPosition = 0;
+        function playWavFilesContinuously(urls) {
+            let currentIndex = 0;
+            const audio = new Audio();
+
+            audio.addEventListener('ended', () => {
+                currentIndex++;
+                if (currentIndex < urls.length) {
+                    audio.src = urls[currentIndex];
+                    audio.play();
+                }
+            });
+
+            audio.src = urls[0];
+            audio.play();
+        }
+
+        async function fetchCAPData() {
+            try {
+                playWavFilesContinuously(BEEP_FILE);
+                const capRes = await fetch(CAP_URL);
+                return await capRes.text();
+            } catch (err) {
+                throw new Error("Failed to fetch CAP data: " + err);
+            }
+        }
+
+        function parseCAPData(capText) {
+            const capXML = new DOMParser().parseFromString(capText, "application/xml");
+            const root = capXML.documentElement;
+            const ns = root.namespaceURI;
+            const info = root.getElementsByTagNameNS(ns, "info")[0];
+            const get = (tag) => info.getElementsByTagNameNS(ns, tag)[0]?.innerHTML.trim() || "";
+
+            const severity = get("severity");
+            let headerColor = HEADER_COLORS.EXTREME;
+            if (severity === SEVERITIES.EXTREME.text) {
+                headerColor = HEADER_COLORS.EXTREME;
+            } else if (severity === SEVERITIES.SEVERE.text) {
+                headerColor = HEADER_COLORS.SEVERE;
+            }
+
+            document.getElementById("header").style.backgroundColor = headerColor;
+            return {
+                category: get("category"),
+                event: get("event"),
+                description: get("description"),
+                instructions: get("instruction"),
+                severity: get("severity"),
+                sender: get("senderName"),
+            };
+        }
+        
+        function createScrollContent(text) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "scroll-content";
+            wrapper.innerHTML = text;
+
+            const duplicate = wrapper.cloneNode(true);
+
+            const container = document.createElement("div");
+            container.className = "scroll-marquee";
+            container.appendChild(wrapper);
+            container.appendChild(duplicate);
+
+            return { container, wrapper };
+        }
+
+        function stopAutoScroll() {
+            if (autoScrollIntervalId) {
+                clearInterval(autoScrollIntervalId);
+                autoScrollIntervalId = null;
+             }
+        }
+
+        function startAutoScroll(element) {
+            stopAutoScroll();
+            currentScrollPosition = 0;
+
+            const originalText = element.innerHTML;
+            const { container, wrapper } = createScrollContent(originalText);
+            element.replaceChildren(container);
+
+            const contentHeight = wrapper.scrollHeight;
+            autoScrollIntervalId = setInterval(() => {
+                currentScrollPosition += SCROLL_STEP;
+                if (currentScrollPosition >= contentHeight) {
+                    currentScrollPosition -= contentHeight;
+                }
+                container.style.transform = `translateY(-${currentScrollPosition}px)`;
+            }, SCROLL_INTERVAL);
+        }
+
+        function updateUI(event, severity, description) {
+            const headerElement = document.getElementById("header");
+            const alertBoxElement = document.getElementById("alertText");
+            headerElement.innerHTML = `${event}: ${severity}`;
+            alertBoxElement.innerHTML =  description.replace(/\n/g, "<br>");
+            alertBoxElement.classList.remove("scrollable");
+            stopAutoScroll();
+            if (description && description.length > SCROLL_THRESHOLD) {
+                alertBoxElement.classList.add("scrollable");
+                startAutoScroll(alertBoxElement);
+            }
+        }
+
+        async function loadCAP() {
+            try {
+                const capText = await fetchCAPData();
+                const { category, event, description, severity, sender, instructions } = parseCAPData(capText);
+                updateUI(event, severity, instructions || description);
+
+                if (description) {
+                    var wavFiles = [];
+                    if (event !== null && severity !== null) wavFiles = wavFiles.concat(await getPrerecordedUrl(sender, category, event, severity));
+                    playWavFilesContinuously(wavFiles);
+                }
+
+                // Todo: Remove this after Alpha team function is ready
+                await setTimeout(async () => {
+                    let fetchUrl = `${PROXY_SERVER_URL}/command/6b42/Station-FB06`;
+                    await fetch(fetchUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
+                        }
+                    }).catch(err => { console.error('POST request failed:', err); });
+                }, 1 * 60 * 1000);
+                // End Todo
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function getPrerecordedUrl(sender, category, event, severity) {
+            let fileUrl = SITE_URL + BASE_FILE_PATH;
+            switch (sender) {
+                case SENDERS.DPM.text:
+                    fileUrl += `/${SENDERS.DPM.path}`;
+                    break;
+                default:
+                    fileUrl += `/${SENDERS.CBC.path}`;
+                    break;
+            }
+            switch (category) {
+                case CATEGORIES.GENERAL_SOP.text:
+                    fileUrl += `/${CATEGORIES.GENERAL_SOP.path}`;
+                    break;
+                case CATEGORIES.EARTHQUAKE.text:
+                    fileUrl += `/${CATEGORIES.EARTHQUAKE.path}`;
+                    break;
+                case CATEGORIES.TSUNAMI.text:
+                    fileUrl += `/${CATEGORIES.TSUNAMI.path}`;
+                    break;
+                case CATEGORIES.TROPICAL_CYCLONE.text:
+                    fileUrl += `/${CATEGORIES.TROPICAL_CYCLONE.path}`;
+                    break;
+                case CATEGORIES.FLOOD.text:
+                    fileUrl += `/${CATEGORIES.FLOOD.path}`;
+                    break;
+                case CATEGORIES.LANDSLIDE.text:
+                    fileUrl += `/${CATEGORIES.LANDSLIDE.path}`;
+                    break;
+                case CATEGORIES.COLD_WEATHER.text:
+                    fileUrl += `/${CATEGORIES.COLD_WEATHER.path}`;
+                    break;
+                case CATEGORIES.FINE_PARTICULATE_MATTER.text:
+                    fileUrl += `/${CATEGORIES.FINE_PARTICULATE_MATTER.path}`;
+                    break;
+                case CATEGORIES.MASS_VIOLENCE_INCIDENT_IN_PUBLIC_AREAS.text:
+                    fileUrl += `/${CATEGORIES.MASS_VIOLENCE_INCIDENT_IN_PUBLIC_AREAS.path}`;
+                    break;
+                case CATEGORIES.HUMAN_EPIDEMICS.text:
+                    fileUrl += `/${CATEGORIES.HUMAN_EPIDEMICS.path}`;
+                    break;
+                case CATEGORIES.FIRE_CHEMICAL_AND_HAZARDOUS_MATERIAL.text:
+                    fileUrl += `/${CATEGORIES.FIRE_CHEMICAL_AND_HAZARDOUS_MATERIAL.path}`;
+                    break;
+                case CATEGORIES.MILITARY_INVASION.text:
+                    fileUrl += `/${CATEGORIES.MILITARY_INVASION.path}`;
+                    break;
+                case CATEGORIES.TRAFFIC_AND_TRANSPORT_INCIDENTS.text:
+                    fileUrl += `/${CATEGORIES.TRAFFIC_AND_TRANSPORT_INCIDENTS.path}`;
+                    break;
+                case CATEGORIES.CYBER_THREATS.text:
+                    fileUrl += `/${CATEGORIES.CYBER_THREATS.path}`;
+                    break;
+                case CATEGORIES.OTHER_HAZARDS.text:
+                    fileUrl += `/${CATEGORIES.OTHER_HAZARDS.path}`;
+                    break;
+                case CATEGORIES.GEOPHYSICAL.text:
+                    fileUrl += `/${CATEGORIES.GEOPHYSICAL.path}`;
+                    break;
+                case CATEGORIES.METEOROLOGICAL.text:
+                    fileUrl += `/${CATEGORIES.METEOROLOGICAL.path}`;
+                    break;
+                case CATEGORIES.GENERAL_EMERGENCY_AND_PUBLIC_SAFETY.text:
+                    fileUrl += `/${CATEGORIES.GENERAL_EMERGENCY_AND_PUBLIC_SAFETY.path}`;
+                    break;
+                case CATEGORIES.LAW_ENFORCEMENT_MILITARY_HOMELAND_AND_LOCAL_PRIVATE_SECURITY.text:
+                    fileUrl += `/${CATEGORIES.LAW_ENFORCEMENT_MILITARY_HOMELAND_AND_LOCAL_PRIVATE_SECURITY.path}`;
+                    break;
+                case CATEGORIES.FIRE_SUPPRESSION_AND_RESCUE.text:
+                    fileUrl += `/${CATEGORIES.FIRE_SUPPRESSION_AND_RESCUE.path}`;
+                    break;
+                case CATEGORIES.MEDICAL_AND_PUBLIC_HEALTH.text:
+                    fileUrl += `/${CATEGORIES.MEDICAL_AND_PUBLIC_HEALTH.path}`;
+                    break;
+                case CATEGORIES.OTHER_EVENTS.text:
+                    fileUrl += `/${CATEGORIES.OTHER_EVENTS.path}`;
+                    break;
+                default:
+                    fileUrl += `/${CATEGORIES.OTHER_EVENTS.path}`;
+            };
+            switch (event) {
+                case EVENTS.GENERAL_SOP.text:
+                    fileUrl += `/${EVENTS.GENERAL_SOP.path}`;
+                    break;
+                case EVENTS.MINOR.text:
+                    fileUrl += `/${EVENTS.MINOR.path}`;
+                    break;
+                case EVENTS.LIGHT.text:
+                    fileUrl += `/${EVENTS.LIGHT.path}`;
+                    break;
+                case EVENTS.MODERATE.text:
+                    fileUrl += `/${EVENTS.MODERATE.path}`;
+                    break;
+                case EVENTS.STRONG.text:
+                    fileUrl += `/${EVENTS.STRONG.path}`;
+                    break;
+                case EVENTS.MAJOR.text:
+                    fileUrl += `/${EVENTS.MAJOR.path}`;
+                    break;
+                case EVENTS.GREAT.text:
+                    fileUrl += `/${EVENTS.GREAT.path}`;
+                    break;
+                case EVENTS.TSUNAMI.text:
+                    fileUrl += `/${EVENTS.TSUNAMI.path}`;
+                    break;
+                case EVENTS.TROPICAL_DEPRESSION.text:
+                    fileUrl += `/${EVENTS.TROPICAL_DEPRESSION.path}`;
+                    break;
+                case EVENTS.TROPICAL_STORM.text:
+                    fileUrl += `/${EVENTS.TROPICAL_STORM.path}`;
+                    break;
+                case EVENTS.TYPHOON.text:
+                    fileUrl += `/${EVENTS.TYPHOON.path}`;
+                    break;
+                case EVENTS.FLOOD.text:
+                    fileUrl += `/${EVENTS.FLOOD.path}`;
+                    break;
+                case EVENTS.LANDSLIDE.text:
+                    fileUrl += `/${EVENTS.LANDSLIDE.path}`;
+                    break;
+                case EVENTS.COLD_WEATHER.text:
+                    fileUrl += `/${EVENTS.COLD_WEATHER.path}`;
+                    break;
+                case EVENTS.FINE_PARTICULATE_MATTER.text:
+                    fileUrl += `/${EVENTS.PM25.path}`;
+                    break;
+                case EVENTS.MASS_VIOLENCE_INCIDENT_IN_PUBLIC_AREAS.text:
+                    fileUrl += `/${EVENTS.MASS_VIOLENCE.path}`;
+                    break;
+                case EVENTS.HUMAN_EPIDEMICS.text:
+                    fileUrl += `/${EVENTS.HUMAN_EPIDEMICS.path}`;
+                    break;
+                case EVENTS.FIRE_CHEMICAL_AND_HAZARDOUS_MATERIAL.text:
+                    fileUrl += `/${EVENTS.FIRE_CHEMICAL_AND_HAZARDOUS_MATERIAL.path}`;
+                    break;
+                case EVENTS.MILITARY_INVASION.text:
+                    fileUrl += `/${EVENTS.MILITARY_INVASION.path}`;
+                    break;
+                case EVENTS.TRAFFIC_AND_TRANSPORT_INCIDENTS.text:
+                    fileUrl += `/${EVENTS.TRAFFIC_AND_TRANSPORT_INCIDENTS.path}`;
+                    break;
+                case EVENTS.CYBER_THREATS.text:
+                    fileUrl += `/${EVENTS.CYBER_THREATS.path}`;
+                    break;
+                case EVENTS.OTHER_HAZARDS.text:
+                    fileUrl += `/${EVENTS.OTHER_HAZARDS.path}`;
+                    break;
+                    case EVENTS.OET001.text:
+                    fileUrl += `/${EVENTS.OET001.path}`;
+                    break;
+                case EVENTS.OET046.text:
+                    fileUrl += `/${EVENTS.OET046.path}`;
+                    break;
+                case EVENTS.OET063.text:
+                    fileUrl += `/${EVENTS.OET063.path}`;
+                    break;
+                case EVENTS.OET068.text:
+                    fileUrl += `/${EVENTS.OET068.path}`;
+                    break;
+                case EVENTS.OET081.text:
+                    fileUrl += `/${EVENTS.OET081.path}`;
+                    break;
+                case EVENTS.OET101.text:
+                    fileUrl += `/${EVENTS.OET101.path}`;
+                    break;
+                case EVENTS.OET112.text:
+                    fileUrl += `/${EVENTS.OET112.path}`;
+                    break;
+                case EVENTS.OET119.text:
+                    fileUrl += `/${EVENTS.OET119.path}`;
+                    break;
+                case EVENTS.OET132.text:
+                    fileUrl += `/${EVENTS.OET132.path}`;
+                    break;
+                case EVENTS.OET217.text:
+                    fileUrl += `/${EVENTS.OET217.path}`;
+                    break;
+                case EVENTS.PRA.text:
+                    fileUrl += `/${EVENTS.PRA.path}`;
+                    break;
+                case EVENTS.EXA.text:
+                    fileUrl += `/${EVENTS.EXA.path}`;
+                    break;
+                case EVENTS.ASA.text:
+                    fileUrl += `/${EVENTS.ASA.path}`;
+                    break;
+                case EVENTS.ACI.text:
+                    fileUrl += `/${EVENTS.ACI.path}`;
+                    break;
+                case EVENTS.CAM.text:
+                    fileUrl += `/${EVENTS.CAM.path}`;
+                    break;
+                case EVENTS.RMT.text:
+                    fileUrl += `/${EVENTS.RMT.path}`;
+                    break;
+                default:
+                    fileUrl += `/${EVENTS.OTHER_HAZARDS.path}`;
+            }
+            switch (severity) {
+                case SEVERITIES.EXTREME.text:
+                    fileUrl += `/${SEVERITIES.EXTREME.path}`;
+                    break;
+                case SEVERITIES.SEVERE.text:
+                    fileUrl += `/${SEVERITIES.SEVERE.path}`;
+                    break;
+            }
+            return fileUrl += FILE_TYPE;
+        }
+
+        window.onload = async () => {
+            await loadCAP();
+        };
+    </script>
+</body>
+
+</html>
